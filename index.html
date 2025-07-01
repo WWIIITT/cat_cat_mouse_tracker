@@ -143,6 +143,20 @@
             animation: sparkleFloat 3s linear infinite;
         }
 
+        .popup-cat {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            pointer-events: none;
+            z-index: 999;
+            border: 3px solid white;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            animation: popOut 1.5s ease-out forwards;
+        }
+
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-20px); }
@@ -177,6 +191,25 @@
             }
             100% {
                 transform: translateY(-10px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes popOut {
+            0% {
+                transform: translate(-50%, -50%) scale(0) rotate(0deg);
+                opacity: 1;
+            }
+            20% {
+                transform: translate(-50%, -50%) scale(1.2) rotate(10deg);
+                opacity: 1;
+            }
+            40% {
+                transform: translate(-50%, -50%) scale(1) rotate(-5deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(0.8) rotate(0deg);
                 opacity: 0;
             }
         }
@@ -231,6 +264,17 @@
         const rightPupil = document.getElementById('rightPupil');
         const sparklesContainer = document.getElementById('sparkles');
 
+        // Cute cat images for popup effect
+        const catImages = [
+            'https://images.unsplash.com/photo-1574158622682-e40e69881006?ixlib=rb-4.0.3&w=400&q=80', // Orange kitten
+            'https://images.unsplash.com/photo-1513245543132-31f507417b26?ixlib=rb-4.0.3&w=400&q=80', // Cute white kitten
+            'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?ixlib=rb-4.0.3&w=400&q=80', // Fluffy gray kitten
+            'https://images.unsplash.com/photo-1571566882372-1598d88abd90?ixlib=rb-4.0.3&w=400&q=80', // Black and white kitten
+            'https://images.unsplash.com/photo-1592194996308-7b43878e84a6?ixlib=rb-4.0.3&w=400&q=80', // Tabby kitten
+            'https://images.unsplash.com/photo-1606214174585-fe31582dc6ee?ixlib=rb-4.0.3&w=400&q=80', // Sleepy kitten
+            'https://images.unsplash.com/photo-1595433707802-6b2626ef1c91?ixlib=rb-4.0.3&w=400&q=80', // Playful kitten
+        ];
+
         // Initialize cursor position
         cursor.style.left = mouseX + 'px';
         cursor.style.top = mouseY + 'px';
@@ -246,6 +290,11 @@
             
             updateCatGaze();
             updateCatRotation();
+        });
+
+        // Handle left click to spawn popup cats
+        document.addEventListener('click', (e) => {
+            createPopupCats(e.clientX, e.clientY);
         });
 
         function updateCatGaze() {
@@ -292,6 +341,42 @@
             // Gentle rotation towards mouse (limited range)
             const limitedAngle = Math.max(-15, Math.min(15, angle * 0.1));
             catContainer.style.transform = `rotate(${limitedAngle}deg)`;
+        }
+
+        // Create popup cats on click
+        function createPopupCats(clickX, clickY) {
+            // Random number of cats (1-3)
+            const numCats = Math.floor(Math.random() * 3) + 1;
+            
+            for (let i = 0; i < numCats; i++) {
+                const popupCat = document.createElement('div');
+                popupCat.className = 'popup-cat';
+                
+                // Random cat image
+                const randomImage = catImages[Math.floor(Math.random() * catImages.length)];
+                popupCat.style.backgroundImage = `url('${randomImage}')`;
+                
+                // Position around the click point with some randomness
+                const offsetX = (Math.random() - 0.5) * 100; // -50px to +50px
+                const offsetY = (Math.random() - 0.5) * 100; // -50px to +50px
+                const finalX = clickX + offsetX;
+                const finalY = clickY + offsetY;
+                
+                popupCat.style.left = finalX + 'px';
+                popupCat.style.top = finalY + 'px';
+                
+                // Add slight delay between cats
+                popupCat.style.animationDelay = (i * 0.1) + 's';
+                
+                document.body.appendChild(popupCat);
+                
+                // Remove after animation completes
+                setTimeout(() => {
+                    if (popupCat.parentNode) {
+                        popupCat.parentNode.removeChild(popupCat);
+                    }
+                }, 1500 + (i * 100)); // Stagger removal slightly
+            }
         }
 
         // Create sparkles
