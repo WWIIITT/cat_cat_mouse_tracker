@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cat Mouse Tracker - Enhanced</title>
+    <title>Cat Mouse Tracker - Enhanced with Sound</title>
     <style>
         * {
             margin: 0;
@@ -17,6 +17,7 @@
             overflow: hidden;
             font-family: 'Arial', sans-serif;
             cursor: none;
+            user-select: none;
         }
 
         .container {
@@ -25,6 +26,41 @@
             align-items: center;
             height: 100vh;
             position: relative;
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1001;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .control-btn.active {
+            background: rgba(255, 107, 107, 0.5);
+            border-color: #ff6b6b;
         }
 
         .cat-container {
@@ -130,6 +166,11 @@
             animation: pulse 1.5s ease-in-out infinite;
         }
 
+        .custom-cursor.clicking {
+            transform: translate(-50%, -50%) scale(1.5);
+            box-shadow: 0 0 30px rgba(255, 107, 107, 0.8);
+        }
+
         .title {
             position: absolute;
             top: 50px;
@@ -173,6 +214,17 @@
             transform: translateX(-50%);
             color: rgba(255, 255, 255, 0.7);
             font-size: 0.9rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .sound-indicator {
+            position: absolute;
+            top: 180px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8rem;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
             text-align: center;
         }
@@ -270,6 +322,15 @@
         .spawned-cat[data-cat-type="5"] .eyes { top: 29%; gap: 21px; }
         .spawned-cat[data-cat-type="6"] .eyes { top: 27%; gap: 23px; }
 
+        .sound-wave {
+            position: absolute;
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: soundWave 0.6s ease-out forwards;
+            pointer-events: none;
+            z-index: 998;
+        }
+
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-20px); }
@@ -345,6 +406,19 @@
             }
         }
 
+        @keyframes soundWave {
+            0% {
+                width: 0;
+                height: 0;
+                opacity: 0.8;
+            }
+            100% {
+                width: 100px;
+                height: 100px;
+                opacity: 0;
+            }
+        }
+
         @media (max-width: 768px) {
             .cat {
                 width: 250px;
@@ -379,19 +453,48 @@
                 font-size: 0.8rem;
                 top: 125px;
             }
+
+            .sound-indicator {
+                font-size: 0.7rem;
+                top: 145px;
+            }
+
+            .controls {
+                top: 10px;
+                right: 10px;
+            }
+
+            .control-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 16px;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Audio elements -->
+    <audio id="clickSound" preload="auto">
+        <source src="./sounds/man.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+
     <div class="custom-cursor" id="cursor"></div>
+    
+    <div class="controls">
+        <button class="control-btn" id="muteBtn" title="Toggle Sound">🔊</button>
+        <button class="control-btn" id="clearBtn" title="Clear All Cats">🧹</button>
+        <button class="control-btn" id="pauseBtn" title="Pause/Resume">⏸️</button>
+    </div>
     
     <div class="title">🐱 Follow My Gaze 🐱</div>
     
     <div class="cat-counter" id="catCounter">Bouncing Cats: 0 / 200</div>
     <div class="collision-info" id="collisionInfo">Collisions: 0</div>
+    <div class="sound-indicator" id="soundIndicator">🔊 Sound: ON | Volume: <span id="volumeLevel">50%</span></div>
     
     <div class="instructions">
-        Left Click: Spawn fast cats | Right Click: Add bouncing marble cats with collisions
+        Left Click: Spawn fast cats | Right Click: Add bouncing marble cats | Space: Clear | M: Mute
     </div>
     
     <div class="sparkles" id="sparkles"></div>
@@ -412,478 +515,646 @@
     </div>
 
     <script>
-        let mouseX = window.innerWidth / 2;
-        let mouseY = window.innerHeight / 2;
-        let spawnedCats = [];
-        let animationId;
-        let totalCollisions = 0;
-        
-        const cursor = document.getElementById('cursor');
-        const cat = document.getElementById('cat');
-        const catContainer = document.getElementById('catContainer');
-        const leftPupil = document.getElementById('leftPupil');
-        const rightPupil = document.getElementById('rightPupil');
-        const sparklesContainer = document.getElementById('sparkles');
-        const catCounter = document.getElementById('catCounter');
-        const collisionInfo = document.getElementById('collisionInfo');
+        // Game State
+        let gameState = {
+            mouseX: window.innerWidth / 2,
+            mouseY: window.innerHeight / 2,
+            spawnedCats: [],
+            animationId: null,
+            totalCollisions: 0,
+            isPaused: false,
+            isMuted: false,
+            volume: 0.5
+        };
 
-        // Cute cat images for popup effect
+        // DOM Elements
+        const elements = {
+            cursor: document.getElementById('cursor'),
+            cat: document.getElementById('cat'),
+            catContainer: document.getElementById('catContainer'),
+            leftPupil: document.getElementById('leftPupil'),
+            rightPupil: document.getElementById('rightPupil'),
+            sparklesContainer: document.getElementById('sparkles'),
+            catCounter: document.getElementById('catCounter'),
+            collisionInfo: document.getElementById('collisionInfo'),
+            soundIndicator: document.getElementById('soundIndicator'),
+            volumeLevel: document.getElementById('volumeLevel'),
+            clickSound: document.getElementById('clickSound'),
+            muteBtn: document.getElementById('muteBtn'),
+            clearBtn: document.getElementById('clearBtn'),
+            pauseBtn: document.getElementById('pauseBtn')
+        };
+
+        // Cat images for variety
         const catImages = [
-            'https://images.unsplash.com/photo-1574158622682-e40e69881006?ixlib=rb-4.0.3&w=400&q=80', // Orange kitten
-            'https://images.unsplash.com/photo-1513245543132-31f507417b26?ixlib=rb-4.0.3&w=400&q=80', // Cute white kitten
-            'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?ixlib=rb-4.0.3&w=400&q=80', // Fluffy gray kitten
-            'https://images.unsplash.com/photo-1571566882372-1598d88abd90?ixlib=rb-4.0.3&w=400&q=80', // Black and white kitten
-            'https://images.unsplash.com/photo-1592194996308-7b43878e84a6?ixlib=rb-4.0.3&w=400&q=80', // Tabby kitten
-            'https://images.unsplash.com/photo-1606214174585-fe31582dc6ee?ixlib=rb-4.0.3&w=400&q=80', // Sleepy kitten
-            'https://images.unsplash.com/photo-1595433707802-6b2626ef1c91?ixlib=rb-4.0.3&w=400&q=80', // Playful kitten
+            'https://images.unsplash.com/photo-1574158622682-e40e69881006?ixlib=rb-4.0.3&w=400&q=80',
+            'https://images.unsplash.com/photo-1513245543132-31f507417b26?ixlib=rb-4.0.3&w=400&q=80',
+            'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?ixlib=rb-4.0.3&w=400&q=80',
+            'https://images.unsplash.com/photo-1571566882372-1598d88abd90?ixlib=rb-4.0.3&w=400&q=80',
+            'https://images.unsplash.com/photo-1592194996308-7b43878e84a6?ixlib=rb-4.0.3&w=400&q=80',
+            'https://images.unsplash.com/photo-1606214174585-fe31582dc6ee?ixlib=rb-4.0.3&w=400&q=80',
+            'https://images.unsplash.com/photo-1595433707802-6b2626ef1c91?ixlib=rb-4.0.3&w=400&q=80'
         ];
 
-        // Initialize cursor position
-        cursor.style.left = mouseX + 'px';
-        cursor.style.top = mouseY + 'px';
-
-        // Disable right-click context menu
-        document.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-        });
-
-        // Track mouse movement
-        document.addEventListener('mousemove', (e) => {
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-            
-            // Update custom cursor
-            cursor.style.left = mouseX + 'px';
-            cursor.style.top = mouseY + 'px';
-            
-            updateCatGaze();
-            updateCatRotation();
-        });
-
-        // Handle left click to spawn popup cats
-        document.addEventListener('click', (e) => {
-            if (e.button === 0) { // Left click
-                createPopupCats(e.clientX, e.clientY);
+        // Audio Manager
+        class AudioManager {
+            constructor() {
+                this.setupAudio();
             }
-        });
 
-        // Handle right click to spawn tracking cats
-        document.addEventListener('mousedown', (e) => {
-            if (e.button === 2) { // Right click
-                e.preventDefault();
-                spawnTrackingCat(e.clientX, e.clientY);
+            setupAudio() {
+                elements.clickSound.volume = gameState.volume;
+                elements.clickSound.addEventListener('error', (e) => {
+                    console.warn('Audio file not found or failed to load:', e);
+                    this.showAudioError();
+                });
             }
-        });
 
-        function updateCatGaze() {
-            const catRect = cat.getBoundingClientRect();
-            const catCenterX = catRect.left + catRect.width / 2;
-            const catCenterY = catRect.top + catRect.height / 2;
-
-            // Calculate eye positions relative to cat (adjusted for better positioning)
-            const leftEyeX = catCenterX - 22;
-            const leftEyeY = catCenterY - 45;
-            const rightEyeX = catCenterX + 22;
-            const rightEyeY = catCenterY - 45;
-
-            // Calculate pupil positions for both eyes
-            updatePupil(leftPupil, leftEyeX, leftEyeY);
-            updatePupil(rightPupil, rightEyeX, rightEyeY);
-        }
-
-        function updatePupil(pupil, eyeX, eyeY) {
-            const maxDistance = 7; // Maximum pupil movement
-            
-            const deltaX = mouseX - eyeX;
-            const deltaY = mouseY - eyeY;
-            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            
-            const limitedDistance = Math.min(distance, maxDistance);
-            const angle = Math.atan2(deltaY, deltaX);
-            
-            const pupilX = Math.cos(angle) * limitedDistance;
-            const pupilY = Math.sin(angle) * limitedDistance;
-            
-            pupil.style.transform = `translate(calc(-50% + ${pupilX}px), calc(-50% + ${pupilY}px))`;
-        }
-
-        function updateCatRotation() {
-            const catRect = cat.getBoundingClientRect();
-            const catCenterX = catRect.left + catRect.width / 2;
-            const catCenterY = catRect.top + catRect.height / 2;
-            
-            const deltaX = mouseX - catCenterX;
-            const deltaY = mouseY - catCenterY;
-            const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
-            
-            // Gentle rotation towards mouse (limited range)
-            const limitedAngle = Math.max(-15, Math.min(15, angle * 0.1));
-            catContainer.style.transform = `rotate(${limitedAngle}deg)`;
-        }
-
-        function updateCatCounter() {
-            catCounter.textContent = `Bouncing Cats: ${spawnedCats.length} / 200`;
-        }
-
-        function updateCollisionCounter() {
-            collisionInfo.textContent = `Collisions: ${totalCollisions}`;
-        }
-
-        // Check collision between two cats
-        function checkCollision(cat1, cat2) {
-            const dx = cat1.x - cat2.x;
-            const dy = cat1.y - cat2.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const minDistance = 60; // Radius of each cat is about 60px (120px diameter / 2)
-            
-            return distance < minDistance;
-        }
-
-        // Resolve collision between two cats using elastic collision physics
-        function resolveCollision(cat1, cat2) {
-            // Calculate collision vector
-            const dx = cat2.x - cat1.x;
-            const dy = cat2.y - cat1.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance === 0) return; // Prevent division by zero
-            
-            // Normalize collision vector
-            const nx = dx / distance;
-            const ny = dy / distance;
-            
-            // Separate overlapping cats
-            const overlap = 60 - distance;
-            if (overlap > 0) {
-                const separationX = (overlap / 2) * nx;
-                const separationY = (overlap / 2) * ny;
-                
-                cat1.x -= separationX;
-                cat1.y -= separationY;
-                cat2.x += separationX;
-                cat2.y += separationY;
-            }
-            
-            // Calculate relative velocity
-            const dvx = cat2.vx - cat1.vx;
-            const dvy = cat2.vy - cat1.vy;
-            
-            // Calculate relative velocity in collision normal direction
-            const dvn = dvx * nx + dvy * ny;
-            
-            // Do not resolve if velocities are separating
-            if (dvn > 0) return;
-            
-            // Apply collision response (elastic collision)
-            const restitution = 0.8; // Bounciness factor
-            const impulse = 2 * dvn / 2; // Assuming equal mass
-            
-            cat1.vx += impulse * nx * restitution;
-            cat1.vy += impulse * ny * restitution;
-            cat2.vx -= impulse * nx * restitution;
-            cat2.vy -= impulse * ny * restitution;
-            
-            // Add visual feedback for collision
-            cat1.element.style.animation = 'collisionFlash 0.3s ease-out';
-            cat2.element.style.animation = 'collisionFlash 0.3s ease-out';
-            
-            // Remove animation class after animation completes
-            setTimeout(() => {
-                cat1.element.style.animation = '';
-                cat2.element.style.animation = '';
-            }, 300);
-            
-            totalCollisions++;
-            updateCollisionCounter();
-        }
-
-        // Check and resolve all collisions
-        function handleCollisions() {
-            for (let i = 0; i < spawnedCats.length; i++) {
-                for (let j = i + 1; j < spawnedCats.length; j++) {
-                    if (checkCollision(spawnedCats[i], spawnedCats[j])) {
-                        resolveCollision(spawnedCats[i], spawnedCats[j]);
+            playClickSound() {
+                if (!gameState.isMuted) {
+                    try {
+                        elements.clickSound.currentTime = 0;
+                        elements.clickSound.play().catch(e => {
+                            console.warn('Audio playback failed:', e);
+                        });
+                    } catch (e) {
+                        console.warn('Audio error:', e);
                     }
                 }
             }
+
+            setVolume(volume) {
+                gameState.volume = Math.max(0, Math.min(1, volume));
+                elements.clickSound.volume = gameState.volume;
+                this.updateVolumeDisplay();
+            }
+
+            toggleMute() {
+                gameState.isMuted = !gameState.isMuted;
+                this.updateSoundIndicator();
+                elements.muteBtn.textContent = gameState.isMuted ? '🔇' : '🔊';
+                elements.muteBtn.classList.toggle('active', gameState.isMuted);
+            }
+
+            updateVolumeDisplay() {
+                elements.volumeLevel.textContent = Math.round(gameState.volume * 100) + '%';
+            }
+
+            updateSoundIndicator() {
+                const status = gameState.isMuted ? 'OFF' : 'ON';
+                const icon = gameState.isMuted ? '🔇' : '🔊';
+                elements.soundIndicator.innerHTML = `${icon} Sound: ${status} | Volume: <span id="volumeLevel">${Math.round(gameState.volume * 100)}%</span>`;
+                elements.volumeLevel = document.getElementById('volumeLevel');
+            }
+
+            showAudioError() {
+                elements.soundIndicator.innerHTML = '⚠️ Audio file not found | Place man.mp3 in ./sounds/ folder';
+                elements.soundIndicator.style.color = 'rgba(255, 200, 200, 0.8)';
+            }
         }
 
-        // Physics animation loop for bouncing cats
-        function animate() {
-            // Handle collisions first
-            handleCollisions();
-            
-            spawnedCats.forEach(catData => {
-                const catElement = catData.element;
-                
-                // Update position
-                catData.x += catData.vx;
-                catData.y += catData.vy;
-                
-                // Bounce off walls
-                const catSize = 120; // Size of spawned cats
-                if (catData.x <= catSize/2) {
-                    catData.x = catSize/2;
-                    catData.vx = Math.abs(catData.vx);
-                }
-                if (catData.x >= window.innerWidth - catSize/2) {
-                    catData.x = window.innerWidth - catSize/2;
-                    catData.vx = -Math.abs(catData.vx);
-                }
-                if (catData.y <= catSize/2) {
-                    catData.y = catSize/2;
-                    catData.vy = Math.abs(catData.vy);
-                }
-                if (catData.y >= window.innerHeight - catSize/2) {
-                    catData.y = window.innerHeight - catSize/2;
-                    catData.vy = -Math.abs(catData.vy);
-                }
-                
-                // Update DOM position
-                catElement.style.left = (catData.x - catSize/2) + 'px';
-                catElement.style.top = (catData.y - catSize/2) + 'px';
-                
-                // Update eye tracking
-                const catRect = catElement.getBoundingClientRect();
+        // Visual Effects Manager
+        class EffectsManager {
+            static createSoundWave(x, y) {
+                const wave = document.createElement('div');
+                wave.className = 'sound-wave';
+                wave.style.left = (x - 50) + 'px';
+                wave.style.top = (y - 50) + 'px';
+                document.body.appendChild(wave);
+
+                setTimeout(() => {
+                    if (wave.parentNode) {
+                        wave.parentNode.removeChild(wave);
+                    }
+                }, 600);
+            }
+
+            static addClickEffect() {
+                elements.cursor.classList.add('clicking');
+                setTimeout(() => {
+                    elements.cursor.classList.remove('clicking');
+                }, 150);
+            }
+
+            static createSparkle() {
+                const sparkle = document.createElement('div');
+                sparkle.className = 'sparkle';
+                sparkle.style.left = Math.random() * 100 + '%';
+                sparkle.style.animationDelay = Math.random() * 3 + 's';
+                sparkle.style.animationDuration = (Math.random() * 3 + 2) + 's';
+                elements.sparklesContainer.appendChild(sparkle);
+
+                setTimeout(() => {
+                    if (sparkle.parentNode) {
+                        sparkle.parentNode.removeChild(sparkle);
+                    }
+                }, 5000);
+            }
+        }
+
+        // Cat Eye Tracking
+        class EyeTracker {
+            static updateCatGaze() {
+                const catRect = elements.cat.getBoundingClientRect();
                 const catCenterX = catRect.left + catRect.width / 2;
                 const catCenterY = catRect.top + catRect.height / 2;
 
-                // Calculate eye positions relative to spawned cat (adjusted for each cat type)
-                const eyeOffset = getEyeOffset(catData.catType);
-                const leftEyeX = catCenterX - eyeOffset.gapX;
-                const leftEyeY = catCenterY - eyeOffset.offsetY;
-                const rightEyeX = catCenterX + eyeOffset.gapX;
-                const rightEyeY = catCenterY - eyeOffset.offsetY;
+                const leftEyeX = catCenterX - 22;
+                const leftEyeY = catCenterY - 45;
+                const rightEyeX = catCenterX + 22;
+                const rightEyeY = catCenterY - 45;
 
-                // Update pupils for spawned cat
-                updatePupilSpawned(catData.leftPupil, leftEyeX, leftEyeY);
-                updatePupilSpawned(catData.rightPupil, rightEyeX, rightEyeY);
-            });
-            
-            animationId = requestAnimationFrame(animate);
-        }
+                this.updatePupil(elements.leftPupil, leftEyeX, leftEyeY);
+                this.updatePupil(elements.rightPupil, rightEyeX, rightEyeY);
+            }
 
-        function getEyeOffset(catType) {
-            // Adjusted eye positions for each cat image to match actual cat eyes
-            const offsets = [
-                { gapX: 9, offsetY: 20 },   // Orange kitten
-                { gapX: 12, offsetY: 30 },  // White kitten  
-                { gapX: 10, offsetY: 25 },  // Gray kitten
-                { gapX: 11, offsetY: 22 },  // Black and white
-                { gapX: 9.5, offsetY: 27 }, // Tabby
-                { gapX: 10.5, offsetY: 23 },// Sleepy
-                { gapX: 11.5, offsetY: 24 } // Playful
-            ];
-            return offsets[catType] || offsets[0];
-        }
+            static updatePupil(pupil, eyeX, eyeY, maxDistance = 7) {
+                const deltaX = gameState.mouseX - eyeX;
+                const deltaY = gameState.mouseY - eyeY;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                
+                const limitedDistance = Math.min(distance, maxDistance);
+                const angle = Math.atan2(deltaY, deltaX);
+                
+                const pupilX = Math.cos(angle) * limitedDistance;
+                const pupilY = Math.sin(angle) * limitedDistance;
+                
+                pupil.style.transform = `translate(calc(-50% + ${pupilX}px), calc(-50% + ${pupilY}px))`;
+            }
 
-        function updatePupilSpawned(pupil, eyeX, eyeY, maxDist = 3) {
-            const deltaX = mouseX - eyeX;
-            const deltaY = mouseY - eyeY;
-            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            
-            const limitedDistance = Math.min(distance, maxDist);
-            const angle = Math.atan2(deltaY, deltaX);
-            
-            const pupilX = Math.cos(angle) * limitedDistance;
-            const pupilY = Math.sin(angle) * limitedDistance;
-            
-            pupil.style.transform = `translate(calc(-50% + ${pupilX}px), calc(-50% + ${pupilY}px))`;
-        }
-
-        // Create popup cats on left click with faster bouncing animation
-        function createPopupCats(clickX, clickY) {
-            // Random number of cats (1-3)
-            const numCats = Math.floor(Math.random() * 3) + 1;
-            
-            for (let i = 0; i < numCats; i++) {
-                const popupCat = document.createElement('div');
-                popupCat.className = 'popup-cat';
+            static updateCatRotation() {
+                const catRect = elements.cat.getBoundingClientRect();
+                const catCenterX = catRect.left + catRect.width / 2;
+                const catCenterY = catRect.top + catRect.height / 2;
                 
-                // Random cat image
-                const randomImage = catImages[Math.floor(Math.random() * catImages.length)];
-                popupCat.style.backgroundImage = `url('${randomImage}')`;
+                const deltaX = gameState.mouseX - catCenterX;
+                const deltaY = gameState.mouseY - catCenterY;
+                const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
                 
-                // Random direction and INCREASED distance for faster movement
-                const angle = Math.random() * 2 * Math.PI;
-                const distance = 150 + Math.random() * 250; // Increased from 80-200 to 150-400px
-                const bounceX = Math.cos(angle) * distance;
-                const bounceY = Math.sin(angle) * distance;
-                
-                popupCat.style.left = clickX + 'px';
-                popupCat.style.top = clickY + 'px';
-                
-                // Create custom keyframes for faster animation
-                const keyframeName = `bounceOut${Date.now()}${i}`;
-                const keyframes = `
-                    @keyframes ${keyframeName} {
-                        0% {
-                            transform: translate(-50%, -50%) scale(0) rotate(0deg);
-                            opacity: 1;
-                        }
-                        10% {
-                            transform: translate(-50%, -50%) scale(1.4) rotate(20deg);
-                            opacity: 1;
-                        }
-                        25% {
-                            transform: translate(calc(-50% + ${bounceX * 0.4}px), calc(-50% + ${bounceY * 0.4}px)) scale(1.2) rotate(-15deg);
-                            opacity: 1;
-                        }
-                        50% {
-                            transform: translate(calc(-50% + ${bounceX * 0.8}px), calc(-50% + ${bounceY * 0.8}px)) scale(1) rotate(10deg);
-                            opacity: 0.9;
-                        }
-                        100% {
-                            transform: translate(calc(-50% + ${bounceX}px), calc(-50% + ${bounceY}px)) scale(0.4) rotate(0deg);
-                            opacity: 0;
-                        }
-                    }
-                `;
-                
-                // Add keyframes to document
-                const style = document.createElement('style');
-                style.textContent = keyframes;
-                document.head.appendChild(style);
-                
-                // Apply faster animation (reduced from 1.2s to 0.8s)
-                popupCat.style.animation = `${keyframeName} 0.8s ease-out forwards`;
-                popupCat.style.animationDelay = (i * 0.05) + 's'; // Reduced delay
-                
-                document.body.appendChild(popupCat);
-                
-                // Remove after animation completes and clean up keyframes
-                setTimeout(() => {
-                    if (popupCat.parentNode) {
-                        popupCat.parentNode.removeChild(popupCat);
-                    }
-                    if (style.parentNode) {
-                        style.parentNode.removeChild(style);
-                    }
-                }, 800 + (i * 50)); // Adjusted timing
+                const limitedAngle = Math.max(-15, Math.min(15, angle * 0.1));
+                elements.catContainer.style.transform = `rotate(${limitedAngle}deg)`;
             }
         }
 
-        // Spawn bouncing tracking cats on right click
-        function spawnTrackingCat(clickX, clickY) {
-            if (spawnedCats.length >= 200) return; // Limit to 200 cats
-            
-            const spawnedCat = document.createElement('div');
-            spawnedCat.className = 'spawned-cat';
-            
-            // Random cat image for variety
-            const catType = Math.floor(Math.random() * catImages.length);
-            const randomImage = catImages[catType];
-            spawnedCat.style.backgroundImage = `url('${randomImage}')`;
-            spawnedCat.setAttribute('data-cat-type', catType);
-            
-            // Starting position
-            const catSize = 120;
-            const x = Math.max(catSize/2, Math.min(window.innerWidth - catSize/2, clickX));
-            const y = Math.max(catSize/2, Math.min(window.innerHeight - catSize/2, clickY));
-            
-            // Random velocity for bouncing
-            const speed = 2 + Math.random() * 4; // Random speed between 2-6px per frame
-            const angle = Math.random() * 2 * Math.PI;
-            const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed;
-            
-            // Create eyes for the spawned cat
-            const eyesContainer = document.createElement('div');
-            eyesContainer.className = 'eyes';
-            
-            const leftEye = document.createElement('div');
-            leftEye.className = 'eye';
-            const leftPupil = document.createElement('div');
-            leftPupil.className = 'pupil';
-            leftEye.appendChild(leftPupil);
-            
-            const rightEye = document.createElement('div');
-            rightEye.className = 'eye';
-            const rightPupil = document.createElement('div');
-            rightPupil.className = 'pupil';
-            rightEye.appendChild(rightPupil);
-            
-            eyesContainer.appendChild(leftEye);
-            eyesContainer.appendChild(rightEye);
-            spawnedCat.appendChild(eyesContainer);
-            
-            document.body.appendChild(spawnedCat);
-            
-            // Add to spawned cats array with physics properties
-            const catData = {
-                element: spawnedCat,
-                leftPupil: leftPupil,
-                rightPupil: rightPupil,
-                x: x,
-                y: y,
-                vx: vx,
-                vy: vy,
-                catType: catType,
-                birthTime: Date.now()
-            };
-            
-            spawnedCats.push(catData);
-            updateCatCounter();
-            
-            // Remove after 30 seconds
-            setTimeout(() => {
-                const index = spawnedCats.indexOf(catData);
+        // Cat Spawning and Management
+        class CatManager {
+            static createPopupCats(clickX, clickY) {
+                const numCats = Math.floor(Math.random() * 3) + 1;
+                
+                for (let i = 0; i < numCats; i++) {
+                    const popupCat = document.createElement('div');
+                    popupCat.className = 'popup-cat';
+                    
+                    const randomImage = catImages[Math.floor(Math.random() * catImages.length)];
+                    popupCat.style.backgroundImage = `url('${randomImage}')`;
+                    
+                    const angle = Math.random() * 2 * Math.PI;
+                    const distance = 150 + Math.random() * 250;
+                    const bounceX = Math.cos(angle) * distance;
+                    const bounceY = Math.sin(angle) * distance;
+                    
+                    popupCat.style.left = clickX + 'px';
+                    popupCat.style.top = clickY + 'px';
+                    
+                    const keyframeName = `bounceOut${Date.now()}${i}`;
+                    const keyframes = `
+                        @keyframes ${keyframeName} {
+                            0% {
+                                transform: translate(-50%, -50%) scale(0) rotate(0deg);
+                                opacity: 1;
+                            }
+                            10% {
+                                transform: translate(-50%, -50%) scale(1.4) rotate(20deg);
+                                opacity: 1;
+                            }
+                            25% {
+                                transform: translate(calc(-50% + ${bounceX * 0.4}px), calc(-50% + ${bounceY * 0.4}px)) scale(1.2) rotate(-15deg);
+                                opacity: 1;
+                            }
+                            50% {
+                                transform: translate(calc(-50% + ${bounceX * 0.8}px), calc(-50% + ${bounceY * 0.8}px)) scale(1) rotate(10deg);
+                                opacity: 0.9;
+                            }
+                            100% {
+                                transform: translate(calc(-50% + ${bounceX}px), calc(-50% + ${bounceY}px)) scale(0.4) rotate(0deg);
+                                opacity: 0;
+                            }
+                        }
+                    `;
+                    
+                    const style = document.createElement('style');
+                    style.textContent = keyframes;
+                    document.head.appendChild(style);
+                    
+                    popupCat.style.animation = `${keyframeName} 0.8s ease-out forwards`;
+                    popupCat.style.animationDelay = (i * 0.05) + 's';
+                    
+                    document.body.appendChild(popupCat);
+                    
+                    setTimeout(() => {
+                        if (popupCat.parentNode) {
+                            popupCat.parentNode.removeChild(popupCat);
+                        }
+                        if (style.parentNode) {
+                            style.parentNode.removeChild(style);
+                        }
+                    }, 800 + (i * 50));
+                }
+            }
+
+            static spawnTrackingCat(clickX, clickY) {
+                if (gameState.spawnedCats.length >= 200) return;
+                
+                const spawnedCat = document.createElement('div');
+                spawnedCat.className = 'spawned-cat';
+                
+                const catType = Math.floor(Math.random() * catImages.length);
+                const randomImage = catImages[catType];
+                spawnedCat.style.backgroundImage = `url('${randomImage}')`;
+                spawnedCat.setAttribute('data-cat-type', catType);
+                
+                const catSize = 120;
+                const x = Math.max(catSize/2, Math.min(window.innerWidth - catSize/2, clickX));
+                const y = Math.max(catSize/2, Math.min(window.innerHeight - catSize/2, clickY));
+                
+                const speed = 2 + Math.random() * 4;
+                const angle = Math.random() * 2 * Math.PI;
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+                
+                const eyesContainer = document.createElement('div');
+                eyesContainer.className = 'eyes';
+                
+                const leftEye = document.createElement('div');
+                leftEye.className = 'eye';
+                const leftPupil = document.createElement('div');
+                leftPupil.className = 'pupil';
+                leftEye.appendChild(leftPupil);
+                
+                const rightEye = document.createElement('div');
+                rightEye.className = 'eye';
+                const rightPupil = document.createElement('div');
+                rightPupil.className = 'pupil';
+                rightEye.appendChild(rightPupil);
+                
+                eyesContainer.appendChild(leftEye);
+                eyesContainer.appendChild(rightEye);
+                spawnedCat.appendChild(eyesContainer);
+                
+                document.body.appendChild(spawnedCat);
+                
+                const catData = {
+                    element: spawnedCat,
+                    leftPupil: leftPupil,
+                    rightPupil: rightPupil,
+                    x: x,
+                    y: y,
+                    vx: vx,
+                    vy: vy,
+                    catType: catType,
+                    birthTime: Date.now()
+                };
+                
+                gameState.spawnedCats.push(catData);
+                this.updateCatCounter();
+                
+                setTimeout(() => {
+                    this.removeCat(catData);
+                }, 30000);
+            }
+
+            static removeCat(catData) {
+                const index = gameState.spawnedCats.indexOf(catData);
                 if (index > -1) {
-                    // Fade out animation
                     catData.element.style.animation = 'fadeOut 0.5s ease-out forwards';
                     
                     setTimeout(() => {
-                        spawnedCats.splice(index, 1);
+                        gameState.spawnedCats.splice(index, 1);
                         if (catData.element.parentNode) {
                             catData.element.parentNode.removeChild(catData.element);
                         }
-                        updateCatCounter();
+                        this.updateCatCounter();
                     }, 500);
                 }
-            }, 30000); // 30 seconds
+            }
+
+            static clearAllCats() {
+                gameState.spawnedCats.forEach(catData => {
+                    if (catData.element.parentNode) {
+                        catData.element.parentNode.removeChild(catData.element);
+                    }
+                });
+                gameState.spawnedCats = [];
+                gameState.totalCollisions = 0;
+                this.updateCatCounter();
+                this.updateCollisionCounter();
+            }
+
+            static updateCatCounter() {
+                elements.catCounter.textContent = `Bouncing Cats: ${gameState.spawnedCats.length} / 200`;
+            }
+
+            static updateCollisionCounter() {
+                elements.collisionInfo.textContent = `Collisions: ${gameState.totalCollisions}`;
+            }
+
+            static getEyeOffset(catType) {
+                const offsets = [
+                    { gapX: 9, offsetY: 20 },
+                    { gapX: 12, offsetY: 30 },
+                    { gapX: 10, offsetY: 25 },
+                    { gapX: 11, offsetY: 22 },
+                    { gapX: 9.5, offsetY: 27 },
+                    { gapX: 10.5, offsetY: 23 },
+                    { gapX: 11.5, offsetY: 24 }
+                ];
+                return offsets[catType] || offsets[0];
+            }
         }
 
-        // Create sparkles
-        function createSparkle() {
-            const sparkle = document.createElement('div');
-            sparkle.className = 'sparkle';
-            sparkle.style.left = Math.random() * 100 + '%';
-            sparkle.style.animationDelay = Math.random() * 3 + 's';
-            sparkle.style.animationDuration = (Math.random() * 3 + 2) + 's';
-            sparklesContainer.appendChild(sparkle);
+        // Physics Engine
+        class PhysicsEngine {
+            static checkCollision(cat1, cat2) {
+                const dx = cat1.x - cat2.x;
+                const dy = cat1.y - cat2.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const minDistance = 60;
+                
+                return distance < minDistance;
+            }
 
-            // Remove sparkle after animation
-            setTimeout(() => {
-                if (sparkle.parentNode) {
-                    sparkle.parentNode.removeChild(sparkle);
+            static resolveCollision(cat1, cat2) {
+                const dx = cat2.x - cat1.x;
+                const dy = cat2.y - cat1.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance === 0) return;
+                
+                const nx = dx / distance;
+                const ny = dy / distance;
+                
+                const overlap = 60 - distance;
+                if (overlap > 0) {
+                    const separationX = (overlap / 2) * nx;
+                    const separationY = (overlap / 2) * ny;
+                    
+                    cat1.x -= separationX;
+                    cat1.y -= separationY;
+                    cat2.x += separationX;
+                    cat2.y += separationY;
                 }
-            }, 5000);
+                
+                const dvx = cat2.vx - cat1.vx;
+                const dvy = cat2.vy - cat1.vy;
+                const dvn = dvx * nx + dvy * ny;
+                
+                if (dvn > 0) return;
+                
+                const restitution = 0.8;
+                const impulse = 2 * dvn / 2;
+                
+                cat1.vx += impulse * nx * restitution;
+                cat1.vy += impulse * ny * restitution;
+                cat2.vx -= impulse * nx * restitution;
+                cat2.vy -= impulse * ny * restitution;
+                
+                cat1.element.style.animation = 'collisionFlash 0.3s ease-out';
+                cat2.element.style.animation = 'collisionFlash 0.3s ease-out';
+                
+                setTimeout(() => {
+                    cat1.element.style.animation = '';
+                    cat2.element.style.animation = '';
+                }, 300);
+                
+                gameState.totalCollisions++;
+                CatManager.updateCollisionCounter();
+            }
+
+            static handleCollisions() {
+                for (let i = 0; i < gameState.spawnedCats.length; i++) {
+                    for (let j = i + 1; j < gameState.spawnedCats.length; j++) {
+                        if (this.checkCollision(gameState.spawnedCats[i], gameState.spawnedCats[j])) {
+                            this.resolveCollision(gameState.spawnedCats[i], gameState.spawnedCats[j]);
+                        }
+                    }
+                }
+            }
         }
 
-        // Create sparkles periodically
-        setInterval(createSparkle, 500);
+        // Game Controller
+        class GameController {
+            constructor() {
+                this.audioManager = new AudioManager();
+                this.init();
+            }
 
-        // Start animation loop
-        animate();
+            init() {
+                this.setupEventListeners();
+                this.initializeCursor();
+                this.startSparkles();
+                this.startAnimation();
+                EyeTracker.updateCatGaze();
+                EyeTracker.updateCatRotation();
+            }
 
-        // Initialize cat gaze on page load
-        updateCatGaze();
-        updateCatRotation();
+            setupEventListeners() {
+                // Disable context menu
+                document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            updateCatGaze();
-            updateCatRotation();
+                // Mouse movement
+                document.addEventListener('mousemove', (e) => {
+                    gameState.mouseX = e.clientX;
+                    gameState.mouseY = e.clientY;
+                    
+                    elements.cursor.style.left = gameState.mouseX + 'px';
+                    elements.cursor.style.top = gameState.mouseY + 'px';
+                    
+                    if (!gameState.isPaused) {
+                        EyeTracker.updateCatGaze();
+                        EyeTracker.updateCatRotation();
+                    }
+                });
+
+                // Mouse clicks
+                document.addEventListener('click', (e) => {
+                    if (e.button === 0 && !gameState.isPaused) {
+                        this.handleLeftClick(e.clientX, e.clientY);
+                    }
+                });
+
+                document.addEventListener('mousedown', (e) => {
+                    if (e.button === 2 && !gameState.isPaused) {
+                        e.preventDefault();
+                        this.handleRightClick(e.clientX, e.clientY);
+                    }
+                });
+
+                // Touch support for mobile
+                document.addEventListener('touchstart', (e) => {
+                    if (!gameState.isPaused) {
+                        const touch = e.touches[0];
+                        this.handleLeftClick(touch.clientX, touch.clientY);
+                    }
+                });
+
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    switch(e.key.toLowerCase()) {
+                        case ' ':
+                            e.preventDefault();
+                            CatManager.clearAllCats();
+                            break;
+                        case 'm':
+                            this.audioManager.toggleMute();
+                            break;
+                        case 'p':
+                            this.togglePause();
+                            break;
+                        case 'arrowup':
+                            e.preventDefault();
+                            this.audioManager.setVolume(gameState.volume + 0.1);
+                            break;
+                        case 'arrowdown':
+                            e.preventDefault();
+                            this.audioManager.setVolume(gameState.volume - 0.1);
+                            break;
+                    }
+                });
+
+                // Control buttons
+                elements.muteBtn.addEventListener('click', () => {
+                    this.audioManager.toggleMute();
+                });
+
+                elements.clearBtn.addEventListener('click', () => {
+                    CatManager.clearAllCats();
+                });
+
+                elements.pauseBtn.addEventListener('click', () => {
+                    this.togglePause();
+                });
+
+                // Window resize
+                window.addEventListener('resize', () => {
+                    if (!gameState.isPaused) {
+                        EyeTracker.updateCatGaze();
+                        EyeTracker.updateCatRotation();
+                    }
+                });
+
+                // Cursor visibility
+                document.addEventListener('mouseenter', () => {
+                    elements.cursor.style.display = 'block';
+                });
+
+                document.addEventListener('mouseleave', () => {
+                    elements.cursor.style.display = 'none';
+                });
+            }
+
+            handleLeftClick(x, y) {
+                EffectsManager.addClickEffect();
+                EffectsManager.createSoundWave(x, y);
+                this.audioManager.playClickSound();
+                CatManager.createPopupCats(x, y);
+            }
+
+            handleRightClick(x, y) {
+                EffectsManager.addClickEffect();
+                EffectsManager.createSoundWave(x, y);
+                this.audioManager.playClickSound();
+                CatManager.spawnTrackingCat(x, y);
+            }
+
+            togglePause() {
+                gameState.isPaused = !gameState.isPaused;
+                elements.pauseBtn.textContent = gameState.isPaused ? '▶️' : '⏸️';
+                elements.pauseBtn.classList.toggle('active', gameState.isPaused);
+                
+                if (!gameState.isPaused) {
+                    this.startAnimation();
+                } else if (gameState.animationId) {
+                    cancelAnimationFrame(gameState.animationId);
+                }
+            }
+
+            initializeCursor() {
+                elements.cursor.style.left = gameState.mouseX + 'px';
+                elements.cursor.style.top = gameState.mouseY + 'px';
+            }
+
+            startSparkles() {
+                setInterval(() => {
+                    EffectsManager.createSparkle();
+                }, 500);
+            }
+
+            startAnimation() {
+                const animate = () => {
+                    if (gameState.isPaused) return;
+
+                    PhysicsEngine.handleCollisions();
+                    
+                    gameState.spawnedCats.forEach(catData => {
+                        const catElement = catData.element;
+                        
+                        catData.x += catData.vx;
+                        catData.y += catData.vy;
+                        
+                        const catSize = 120;
+                        if (catData.x <= catSize/2) {
+                            catData.x = catSize/2;
+                            catData.vx = Math.abs(catData.vx);
+                        }
+                        if (catData.x >= window.innerWidth - catSize/2) {
+                            catData.x = window.innerWidth - catSize/2;
+                            catData.vx = -Math.abs(catData.vx);
+                        }
+                        if (catData.y <= catSize/2) {
+                            catData.y = catSize/2;
+                            catData.vy = Math.abs(catData.vy);
+                        }
+                        if (catData.y >= window.innerHeight - catSize/2) {
+                            catData.y = window.innerHeight - catSize/2;
+                            catData.vy = -Math.abs(catData.vy);
+                        }
+                        
+                        catElement.style.left = (catData.x - catSize/2) + 'px';
+                        catElement.style.top = (catData.y - catSize/2) + 'px';
+                        
+                        const catRect = catElement.getBoundingClientRect();
+                        const catCenterX = catRect.left + catRect.width / 2;
+                        const catCenterY = catRect.top + catRect.height / 2;
+
+                        const eyeOffset = CatManager.getEyeOffset(catData.catType);
+                        const leftEyeX = catCenterX - eyeOffset.gapX;
+                        const leftEyeY = catCenterY - eyeOffset.offsetY;
+                        const rightEyeX = catCenterX + eyeOffset.gapX;
+                        const rightEyeY = catCenterY - eyeOffset.offsetY;
+
+                        EyeTracker.updatePupil(catData.leftPupil, leftEyeX, leftEyeY, 3);
+                        EyeTracker.updatePupil(catData.rightPupil, rightEyeX, rightEyeY, 3);
+                    });
+                    
+                    gameState.animationId = requestAnimationFrame(animate);
+                };
+                
+                animate();
+            }
+        }
+
+        // Initialize the game when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new GameController();
         });
 
-        // Hide default cursor and show custom one
-        document.addEventListener('mouseenter', () => {
-            cursor.style.display = 'block';
-        });
-
-        document.addEventListener('mouseleave', () => {
-            cursor.style.display = 'none';
-        });
+        // Start immediately if DOM is already loaded
+        if (document.readyState === 'loading') {
+            // Still loading, wait for DOMContentLoaded
+        } else {
+            // DOM is already loaded
+            new GameController();
+        }
     </script>
 </body>
 </html>
