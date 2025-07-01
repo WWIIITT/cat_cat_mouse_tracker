@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cat Mouse Tracker</title>
+    <title>Cat Mouse Tracker - Enhanced</title>
     <style>
         * {
             margin: 0;
@@ -77,25 +77,26 @@
 
         .eyes {
             position: absolute;
-            top: 35%;
+            top: 30%;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 40px;
+            gap: 45px;
         }
 
         .eye {
-            width: 25px;
-            height: 25px;
-            background: #fff;
+            width: 28px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.95);
             border-radius: 50%;
             position: relative;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
         .pupil {
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             background: #000;
             border-radius: 50%;
             position: absolute;
@@ -165,6 +166,17 @@
             text-align: center;
         }
 
+        .collision-info {
+            position: absolute;
+            top: 150px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
         .sparkles {
             position: absolute;
             width: 100%;
@@ -196,9 +208,8 @@
 
         .spawned-cat {
             position: absolute;
-            width: 180px;
-            height: 180px;
-            background-image: url('https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80');
+            width: 120px;
+            height: 120px;
             background-size: cover;
             background-position: center;
             border-radius: 50%;
@@ -207,6 +218,12 @@
             animation: spawnIn 0.3s ease-out;
             transform-origin: center;
             will-change: transform;
+            transition: border-color 0.1s ease;
+        }
+
+        .spawned-cat.collision {
+            border-color: #ff6b6b;
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.6), 0 15px 30px rgba(0, 0, 0, 0.3);
         }
 
         .spawned-cat::before {
@@ -225,24 +242,33 @@
         }
 
         .spawned-cat .eyes {
-            top: 35%;
-            gap: 27px;
+            top: 28%;
+            gap: 22px;
         }
 
         .spawned-cat .eye {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
         }
 
         .spawned-cat .pupil {
-            width: 9px;
-            height: 9px;
+            width: 8px;
+            height: 8px;
         }
 
         .spawned-cat .pupil::after {
-            width: 3px;
-            height: 3px;
+            width: 2px;
+            height: 2px;
         }
+
+        /* Different eye positions for different cat images */
+        .spawned-cat[data-cat-type="0"] .eyes { top: 32%; gap: 18px; }
+        .spawned-cat[data-cat-type="1"] .eyes { top: 25%; gap: 24px; }
+        .spawned-cat[data-cat-type="2"] .eyes { top: 30%; gap: 20px; }
+        .spawned-cat[data-cat-type="3"] .eyes { top: 28%; gap: 22px; }
+        .spawned-cat[data-cat-type="4"] .eyes { top: 26%; gap: 19px; }
+        .spawned-cat[data-cat-type="5"] .eyes { top: 29%; gap: 21px; }
+        .spawned-cat[data-cat-type="6"] .eyes { top: 27%; gap: 23px; }
 
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
@@ -308,6 +334,17 @@
             }
         }
 
+        @keyframes collisionFlash {
+            0%, 100% { 
+                border-color: rgba(255, 255, 255, 0.8);
+                box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+            }
+            50% { 
+                border-color: #ff6b6b;
+                box-shadow: 0 0 20px rgba(255, 107, 107, 0.8), 0 15px 30px rgba(0, 0, 0, 0.3);
+            }
+        }
+
         @media (max-width: 768px) {
             .cat {
                 width: 250px;
@@ -320,12 +357,12 @@
             }
             
             .eyes {
-                gap: 35px;
+                gap: 38px;
             }
 
             .spawned-cat {
-                width: 120px;
-                height: 120px;
+                width: 100px;
+                height: 100px;
             }
 
             .instructions {
@@ -337,6 +374,11 @@
                 font-size: 1rem;
                 top: 100px;
             }
+
+            .collision-info {
+                font-size: 0.8rem;
+                top: 125px;
+            }
         }
     </style>
 </head>
@@ -346,9 +388,10 @@
     <div class="title">🐱 Follow My Gaze 🐱</div>
     
     <div class="cat-counter" id="catCounter">Bouncing Cats: 0 / 200</div>
+    <div class="collision-info" id="collisionInfo">Collisions: 0</div>
     
     <div class="instructions">
-        Left Click: Spawn fast cats | Right Click: Add bouncing marble cats
+        Left Click: Spawn fast cats | Right Click: Add bouncing marble cats with collisions
     </div>
     
     <div class="sparkles" id="sparkles"></div>
@@ -373,6 +416,7 @@
         let mouseY = window.innerHeight / 2;
         let spawnedCats = [];
         let animationId;
+        let totalCollisions = 0;
         
         const cursor = document.getElementById('cursor');
         const cat = document.getElementById('cat');
@@ -381,6 +425,7 @@
         const rightPupil = document.getElementById('rightPupil');
         const sparklesContainer = document.getElementById('sparkles');
         const catCounter = document.getElementById('catCounter');
+        const collisionInfo = document.getElementById('collisionInfo');
 
         // Cute cat images for popup effect
         const catImages = [
@@ -435,11 +480,11 @@
             const catCenterX = catRect.left + catRect.width / 2;
             const catCenterY = catRect.top + catRect.height / 2;
 
-            // Calculate eye positions relative to cat
-            const leftEyeX = catCenterX - 20;
-            const leftEyeY = catCenterY - 30;
-            const rightEyeX = catCenterX + 20;
-            const rightEyeY = catCenterY - 30;
+            // Calculate eye positions relative to cat (adjusted for better positioning)
+            const leftEyeX = catCenterX - 22;
+            const leftEyeY = catCenterY - 45;
+            const rightEyeX = catCenterX + 22;
+            const rightEyeY = catCenterY - 45;
 
             // Calculate pupil positions for both eyes
             updatePupil(leftPupil, leftEyeX, leftEyeY);
@@ -447,7 +492,7 @@
         }
 
         function updatePupil(pupil, eyeX, eyeY) {
-            const maxDistance = 6; // Maximum pupil movement
+            const maxDistance = 7; // Maximum pupil movement
             
             const deltaX = mouseX - eyeX;
             const deltaY = mouseY - eyeY;
@@ -480,8 +525,94 @@
             catCounter.textContent = `Bouncing Cats: ${spawnedCats.length} / 200`;
         }
 
+        function updateCollisionCounter() {
+            collisionInfo.textContent = `Collisions: ${totalCollisions}`;
+        }
+
+        // Check collision between two cats
+        function checkCollision(cat1, cat2) {
+            const dx = cat1.x - cat2.x;
+            const dy = cat1.y - cat2.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = 60; // Radius of each cat is about 60px (120px diameter / 2)
+            
+            return distance < minDistance;
+        }
+
+        // Resolve collision between two cats using elastic collision physics
+        function resolveCollision(cat1, cat2) {
+            // Calculate collision vector
+            const dx = cat2.x - cat1.x;
+            const dy = cat2.y - cat1.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance === 0) return; // Prevent division by zero
+            
+            // Normalize collision vector
+            const nx = dx / distance;
+            const ny = dy / distance;
+            
+            // Separate overlapping cats
+            const overlap = 60 - distance;
+            if (overlap > 0) {
+                const separationX = (overlap / 2) * nx;
+                const separationY = (overlap / 2) * ny;
+                
+                cat1.x -= separationX;
+                cat1.y -= separationY;
+                cat2.x += separationX;
+                cat2.y += separationY;
+            }
+            
+            // Calculate relative velocity
+            const dvx = cat2.vx - cat1.vx;
+            const dvy = cat2.vy - cat1.vy;
+            
+            // Calculate relative velocity in collision normal direction
+            const dvn = dvx * nx + dvy * ny;
+            
+            // Do not resolve if velocities are separating
+            if (dvn > 0) return;
+            
+            // Apply collision response (elastic collision)
+            const restitution = 0.8; // Bounciness factor
+            const impulse = 2 * dvn / 2; // Assuming equal mass
+            
+            cat1.vx += impulse * nx * restitution;
+            cat1.vy += impulse * ny * restitution;
+            cat2.vx -= impulse * nx * restitution;
+            cat2.vy -= impulse * ny * restitution;
+            
+            // Add visual feedback for collision
+            cat1.element.style.animation = 'collisionFlash 0.3s ease-out';
+            cat2.element.style.animation = 'collisionFlash 0.3s ease-out';
+            
+            // Remove animation class after animation completes
+            setTimeout(() => {
+                cat1.element.style.animation = '';
+                cat2.element.style.animation = '';
+            }, 300);
+            
+            totalCollisions++;
+            updateCollisionCounter();
+        }
+
+        // Check and resolve all collisions
+        function handleCollisions() {
+            for (let i = 0; i < spawnedCats.length; i++) {
+                for (let j = i + 1; j < spawnedCats.length; j++) {
+                    if (checkCollision(spawnedCats[i], spawnedCats[j])) {
+                        resolveCollision(spawnedCats[i], spawnedCats[j]);
+                    }
+                }
+            }
+        }
+
         // Physics animation loop for bouncing cats
         function animate() {
+            // Handle collisions first
+            handleCollisions();
+            
             spawnedCats.forEach(catData => {
                 const catElement = catData.element;
                 
@@ -490,14 +621,22 @@
                 catData.y += catData.vy;
                 
                 // Bounce off walls
-                const catSize = 180; // Size of spawned cats
-                if (catData.x <= catSize/2 || catData.x >= window.innerWidth - catSize/2) {
-                    catData.vx = -catData.vx;
-                    catData.x = Math.max(catSize/2, Math.min(window.innerWidth - catSize/2, catData.x));
+                const catSize = 120; // Size of spawned cats
+                if (catData.x <= catSize/2) {
+                    catData.x = catSize/2;
+                    catData.vx = Math.abs(catData.vx);
                 }
-                if (catData.y <= catSize/2 || catData.y >= window.innerHeight - catSize/2) {
-                    catData.vy = -catData.vy;
-                    catData.y = Math.max(catSize/2, Math.min(window.innerHeight - catSize/2, catData.y));
+                if (catData.x >= window.innerWidth - catSize/2) {
+                    catData.x = window.innerWidth - catSize/2;
+                    catData.vx = -Math.abs(catData.vx);
+                }
+                if (catData.y <= catSize/2) {
+                    catData.y = catSize/2;
+                    catData.vy = Math.abs(catData.vy);
+                }
+                if (catData.y >= window.innerHeight - catSize/2) {
+                    catData.y = window.innerHeight - catSize/2;
+                    catData.vy = -Math.abs(catData.vy);
                 }
                 
                 // Update DOM position
@@ -509,11 +648,12 @@
                 const catCenterX = catRect.left + catRect.width / 2;
                 const catCenterY = catRect.top + catRect.height / 2;
 
-                // Calculate eye positions relative to spawned cat
-                const leftEyeX = catCenterX - 13.5;
-                const leftEyeY = catCenterY - 18;
-                const rightEyeX = catCenterX + 13.5;
-                const rightEyeY = catCenterY - 18;
+                // Calculate eye positions relative to spawned cat (adjusted for each cat type)
+                const eyeOffset = getEyeOffset(catData.catType);
+                const leftEyeX = catCenterX - eyeOffset.gapX;
+                const leftEyeY = catCenterY - eyeOffset.offsetY;
+                const rightEyeX = catCenterX + eyeOffset.gapX;
+                const rightEyeY = catCenterY - eyeOffset.offsetY;
 
                 // Update pupils for spawned cat
                 updatePupilSpawned(catData.leftPupil, leftEyeX, leftEyeY);
@@ -523,7 +663,21 @@
             animationId = requestAnimationFrame(animate);
         }
 
-        function updatePupilSpawned(pupil, eyeX, eyeY, maxDist = 4) {
+        function getEyeOffset(catType) {
+            // Adjusted eye positions for each cat image to match actual cat eyes
+            const offsets = [
+                { gapX: 9, offsetY: 20 },   // Orange kitten
+                { gapX: 12, offsetY: 30 },  // White kitten  
+                { gapX: 10, offsetY: 25 },  // Gray kitten
+                { gapX: 11, offsetY: 22 },  // Black and white
+                { gapX: 9.5, offsetY: 27 }, // Tabby
+                { gapX: 10.5, offsetY: 23 },// Sleepy
+                { gapX: 11.5, offsetY: 24 } // Playful
+            ];
+            return offsets[catType] || offsets[0];
+        }
+
+        function updatePupilSpawned(pupil, eyeX, eyeY, maxDist = 3) {
             const deltaX = mouseX - eyeX;
             const deltaY = mouseY - eyeY;
             const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -617,11 +771,13 @@
             spawnedCat.className = 'spawned-cat';
             
             // Random cat image for variety
-            const randomImage = catImages[Math.floor(Math.random() * catImages.length)];
+            const catType = Math.floor(Math.random() * catImages.length);
+            const randomImage = catImages[catType];
             spawnedCat.style.backgroundImage = `url('${randomImage}')`;
+            spawnedCat.setAttribute('data-cat-type', catType);
             
             // Starting position
-            const catSize = 180;
+            const catSize = 120;
             const x = Math.max(catSize/2, Math.min(window.innerWidth - catSize/2, clickX));
             const y = Math.max(catSize/2, Math.min(window.innerHeight - catSize/2, clickY));
             
@@ -662,13 +818,14 @@
                 y: y,
                 vx: vx,
                 vy: vy,
+                catType: catType,
                 birthTime: Date.now()
             };
             
             spawnedCats.push(catData);
             updateCatCounter();
             
-            // Remove after 20 seconds
+            // Remove after 30 seconds
             setTimeout(() => {
                 const index = spawnedCats.indexOf(catData);
                 if (index > -1) {
@@ -683,7 +840,7 @@
                         updateCatCounter();
                     }, 500);
                 }
-            }, 20000); // 20 seconds
+            }, 30000); // 30 seconds
         }
 
         // Create sparkles
