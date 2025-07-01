@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Mouse Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            cursor: none;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            position: relative;
+        }
+
+        .cat-container {
+            position: relative;
+            transform-origin: center;
+            transition: transform 0.2s ease-out;
+        }
+
+        .cat {
+            width: 300px;
+            height: 300px;
+            background-image: url('https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80');
+            background-size: cover;
+            background-position: center;
+            border-radius: 50%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            position: relative;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .cat::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7);
+            background-size: 300% 300%;
+            animation: gradientMove 4s ease infinite;
+            z-index: -1;
+            opacity: 0.7;
+        }
+
+        .eyes {
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 40px;
+        }
+
+        .eye {
+            width: 25px;
+            height: 25px;
+            background: #fff;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .pupil {
+            width: 12px;
+            height: 12px;
+            background: #000;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s ease-out;
+        }
+
+        .pupil::after {
+            content: '';
+            width: 4px;
+            height: 4px;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+        }
+
+        .custom-cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            background: radial-gradient(circle, #ff6b6b, #ff5252);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.6);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .title {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            animation: titleGlow 2s ease-in-out infinite alternate;
+        }
+
+        .sparkles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .sparkle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            animation: sparkleFloat 3s linear infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes gradientMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+        }
+
+        @keyframes titleGlow {
+            0% { text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 255, 255, 0.3); }
+            100% { text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), 0 0 30px rgba(255, 255, 255, 0.6); }
+        }
+
+        @keyframes sparkleFloat {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-10px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .cat {
+                width: 250px;
+                height: 250px;
+            }
+            
+            .title {
+                font-size: 2rem;
+                top: 30px;
+            }
+            
+            .eyes {
+                gap: 35px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="custom-cursor" id="cursor"></div>
+    
+    <div class="title">🐱 Follow My Gaze 🐱</div>
+    
+    <div class="sparkles" id="sparkles"></div>
+    
+    <div class="container">
+        <div class="cat-container" id="catContainer">
+            <div class="cat" id="cat">
+                <div class="eyes">
+                    <div class="eye">
+                        <div class="pupil" id="leftPupil"></div>
+                    </div>
+                    <div class="eye">
+                        <div class="pupil" id="rightPupil"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mouseX = window.innerWidth / 2;
+        let mouseY = window.innerHeight / 2;
+        
+        const cursor = document.getElementById('cursor');
+        const cat = document.getElementById('cat');
+        const catContainer = document.getElementById('catContainer');
+        const leftPupil = document.getElementById('leftPupil');
+        const rightPupil = document.getElementById('rightPupil');
+        const sparklesContainer = document.getElementById('sparkles');
+
+        // Initialize cursor position
+        cursor.style.left = mouseX + 'px';
+        cursor.style.top = mouseY + 'px';
+
+        // Track mouse movement
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // Update custom cursor
+            cursor.style.left = mouseX + 'px';
+            cursor.style.top = mouseY + 'px';
+            
+            updateCatGaze();
+            updateCatRotation();
+        });
+
+        function updateCatGaze() {
+            const catRect = cat.getBoundingClientRect();
+            const catCenterX = catRect.left + catRect.width / 2;
+            const catCenterY = catRect.top + catRect.height / 2;
+
+            // Calculate eye positions relative to cat
+            const leftEyeX = catCenterX - 20;
+            const leftEyeY = catCenterY - 30;
+            const rightEyeX = catCenterX + 20;
+            const rightEyeY = catCenterY - 30;
+
+            // Calculate pupil positions for both eyes
+            updatePupil(leftPupil, leftEyeX, leftEyeY);
+            updatePupil(rightPupil, rightEyeX, rightEyeY);
+        }
+
+        function updatePupil(pupil, eyeX, eyeY) {
+            const maxDistance = 6; // Maximum pupil movement
+            
+            const deltaX = mouseX - eyeX;
+            const deltaY = mouseY - eyeY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            
+            const limitedDistance = Math.min(distance, maxDistance);
+            const angle = Math.atan2(deltaY, deltaX);
+            
+            const pupilX = Math.cos(angle) * limitedDistance;
+            const pupilY = Math.sin(angle) * limitedDistance;
+            
+            pupil.style.transform = `translate(calc(-50% + ${pupilX}px), calc(-50% + ${pupilY}px))`;
+        }
+
+        function updateCatRotation() {
+            const catRect = cat.getBoundingClientRect();
+            const catCenterX = catRect.left + catRect.width / 2;
+            const catCenterY = catRect.top + catRect.height / 2;
+            
+            const deltaX = mouseX - catCenterX;
+            const deltaY = mouseY - catCenterY;
+            const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+            
+            // Gentle rotation towards mouse (limited range)
+            const limitedAngle = Math.max(-15, Math.min(15, angle * 0.1));
+            catContainer.style.transform = `rotate(${limitedAngle}deg)`;
+        }
+
+        // Create sparkles
+        function createSparkle() {
+            const sparkle = document.createElement('div');
+            sparkle.className = 'sparkle';
+            sparkle.style.left = Math.random() * 100 + '%';
+            sparkle.style.animationDelay = Math.random() * 3 + 's';
+            sparkle.style.animationDuration = (Math.random() * 3 + 2) + 's';
+            sparklesContainer.appendChild(sparkle);
+
+            // Remove sparkle after animation
+            setTimeout(() => {
+                if (sparkle.parentNode) {
+                    sparkle.parentNode.removeChild(sparkle);
+                }
+            }, 5000);
+        }
+
+        // Create sparkles periodically
+        setInterval(createSparkle, 500);
+
+        // Initialize cat gaze on page load
+        updateCatGaze();
+        updateCatRotation();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            updateCatGaze();
+            updateCatRotation();
+        });
+
+        // Hide default cursor and show custom one
+        document.addEventListener('mouseenter', () => {
+            cursor.style.display = 'block';
+        });
+
+        document.addEventListener('mouseleave', () => {
+            cursor.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
