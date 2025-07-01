@@ -153,6 +153,18 @@
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
+        .cat-counter {
+            position: absolute;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
         .sparkles {
             position: absolute;
             width: 100%;
@@ -184,26 +196,26 @@
 
         .spawned-cat {
             position: absolute;
-            width: 200px;
-            height: 200px;
+            width: 180px;
+            height: 180px;
             background-image: url('https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80');
             background-size: cover;
             background-position: center;
             border-radius: 50%;
             box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
             border: 3px solid rgba(255, 255, 255, 0.8);
-            animation: spawnIn 0.5s ease-out, float 3s ease-in-out infinite 0.5s;
+            animation: spawnIn 0.3s ease-out;
             transform-origin: center;
-            transition: transform 0.2s ease-out;
+            will-change: transform;
         }
 
         .spawned-cat::before {
             content: '';
             position: absolute;
-            top: -10px;
-            left: -10px;
-            right: -10px;
-            bottom: -10px;
+            top: -8px;
+            left: -8px;
+            right: -8px;
+            bottom: -8px;
             border-radius: 50%;
             background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7);
             background-size: 300% 300%;
@@ -214,17 +226,17 @@
 
         .spawned-cat .eyes {
             top: 35%;
-            gap: 30px;
+            gap: 27px;
         }
 
         .spawned-cat .eye {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
         }
 
         .spawned-cat .pupil {
-            width: 10px;
-            height: 10px;
+            width: 9px;
+            height: 9px;
         }
 
         .spawned-cat .pupil::after {
@@ -270,35 +282,29 @@
             }
         }
 
-        @keyframes bounceOut {
-            0% {
-                transform: translate(-50%, -50%) scale(0) rotate(0deg);
-                opacity: 1;
-            }
-            15% {
-                transform: translate(-50%, -50%) scale(1.3) rotate(15deg);
-                opacity: 1;
-            }
-            30% {
-                opacity: 1;
-            }
-            100% {
-                opacity: 0;
-            }
-        }
-
         @keyframes spawnIn {
             0% {
                 transform: scale(0) rotate(0deg);
                 opacity: 0;
             }
             50% {
-                transform: scale(1.2) rotate(10deg);
+                transform: scale(1.1) rotate(5deg);
                 opacity: 0.8;
             }
             100% {
                 transform: scale(1) rotate(0deg);
                 opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.8);
             }
         }
 
@@ -318,13 +324,18 @@
             }
 
             .spawned-cat {
-                width: 150px;
-                height: 150px;
+                width: 120px;
+                height: 120px;
             }
 
             .instructions {
                 font-size: 0.9rem;
                 bottom: 20px;
+            }
+
+            .cat-counter {
+                font-size: 1rem;
+                top: 100px;
             }
         }
     </style>
@@ -334,8 +345,10 @@
     
     <div class="title">🐱 Follow My Gaze 🐱</div>
     
+    <div class="cat-counter" id="catCounter">Bouncing Cats: 0 / 200</div>
+    
     <div class="instructions">
-        Left Click: Spawn cute cats | Right Click: Add more tracking cats
+        Left Click: Spawn fast cats | Right Click: Add bouncing marble cats
     </div>
     
     <div class="sparkles" id="sparkles"></div>
@@ -359,6 +372,7 @@
         let mouseX = window.innerWidth / 2;
         let mouseY = window.innerHeight / 2;
         let spawnedCats = [];
+        let animationId;
         
         const cursor = document.getElementById('cursor');
         const cat = document.getElementById('cat');
@@ -366,6 +380,7 @@
         const leftPupil = document.getElementById('leftPupil');
         const rightPupil = document.getElementById('rightPupil');
         const sparklesContainer = document.getElementById('sparkles');
+        const catCounter = document.getElementById('catCounter');
 
         // Cute cat images for popup effect
         const catImages = [
@@ -398,7 +413,6 @@
             
             updateCatGaze();
             updateCatRotation();
-            updateSpawnedCats();
         });
 
         // Handle left click to spawn popup cats
@@ -462,30 +476,51 @@
             catContainer.style.transform = `rotate(${limitedAngle}deg)`;
         }
 
-        function updateSpawnedCats() {
+        function updateCatCounter() {
+            catCounter.textContent = `Bouncing Cats: ${spawnedCats.length} / 200`;
+        }
+
+        // Physics animation loop for bouncing cats
+        function animate() {
             spawnedCats.forEach(catData => {
                 const catElement = catData.element;
+                
+                // Update position
+                catData.x += catData.vx;
+                catData.y += catData.vy;
+                
+                // Bounce off walls
+                const catSize = 180; // Size of spawned cats
+                if (catData.x <= catSize/2 || catData.x >= window.innerWidth - catSize/2) {
+                    catData.vx = -catData.vx;
+                    catData.x = Math.max(catSize/2, Math.min(window.innerWidth - catSize/2, catData.x));
+                }
+                if (catData.y <= catSize/2 || catData.y >= window.innerHeight - catSize/2) {
+                    catData.vy = -catData.vy;
+                    catData.y = Math.max(catSize/2, Math.min(window.innerHeight - catSize/2, catData.y));
+                }
+                
+                // Update DOM position
+                catElement.style.left = (catData.x - catSize/2) + 'px';
+                catElement.style.top = (catData.y - catSize/2) + 'px';
+                
+                // Update eye tracking
                 const catRect = catElement.getBoundingClientRect();
                 const catCenterX = catRect.left + catRect.width / 2;
                 const catCenterY = catRect.top + catRect.height / 2;
 
                 // Calculate eye positions relative to spawned cat
-                const leftEyeX = catCenterX - 15;
-                const leftEyeY = catCenterY - 20;
-                const rightEyeX = catCenterX + 15;
-                const rightEyeY = catCenterY - 20;
+                const leftEyeX = catCenterX - 13.5;
+                const leftEyeY = catCenterY - 18;
+                const rightEyeX = catCenterX + 13.5;
+                const rightEyeY = catCenterY - 18;
 
                 // Update pupils for spawned cat
-                updatePupil(catData.leftPupil, leftEyeX, leftEyeY, 4);
-                updatePupil(catData.rightPupil, rightEyeX, rightEyeY, 4);
-
-                // Rotate spawned cat slightly
-                const deltaX = mouseX - catCenterX;
-                const deltaY = mouseY - catCenterY;
-                const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
-                const limitedAngle = Math.max(-10, Math.min(10, angle * 0.05));
-                catElement.style.transform += ` rotate(${limitedAngle}deg)`;
+                updatePupilSpawned(catData.leftPupil, leftEyeX, leftEyeY);
+                updatePupilSpawned(catData.rightPupil, rightEyeX, rightEyeY);
             });
+            
+            animationId = requestAnimationFrame(animate);
         }
 
         function updatePupilSpawned(pupil, eyeX, eyeY, maxDist = 4) {
@@ -502,7 +537,7 @@
             pupil.style.transform = `translate(calc(-50% + ${pupilX}px), calc(-50% + ${pupilY}px))`;
         }
 
-        // Create popup cats on left click with bouncing animation
+        // Create popup cats on left click with faster bouncing animation
         function createPopupCats(clickX, clickY) {
             // Random number of cats (1-3)
             const numCats = Math.floor(Math.random() * 3) + 1;
@@ -515,16 +550,16 @@
                 const randomImage = catImages[Math.floor(Math.random() * catImages.length)];
                 popupCat.style.backgroundImage = `url('${randomImage}')`;
                 
-                // Random direction and distance for bouncing
+                // Random direction and INCREASED distance for faster movement
                 const angle = Math.random() * 2 * Math.PI;
-                const distance = 80 + Math.random() * 120; // 80-200px
+                const distance = 150 + Math.random() * 250; // Increased from 80-200 to 150-400px
                 const bounceX = Math.cos(angle) * distance;
                 const bounceY = Math.sin(angle) * distance;
                 
                 popupCat.style.left = clickX + 'px';
                 popupCat.style.top = clickY + 'px';
                 
-                // Create custom keyframes for this specific cat's bounce direction
+                // Create custom keyframes for faster animation
                 const keyframeName = `bounceOut${Date.now()}${i}`;
                 const keyframes = `
                     @keyframes ${keyframeName} {
@@ -532,20 +567,20 @@
                             transform: translate(-50%, -50%) scale(0) rotate(0deg);
                             opacity: 1;
                         }
-                        15% {
-                            transform: translate(-50%, -50%) scale(1.3) rotate(15deg);
+                        10% {
+                            transform: translate(-50%, -50%) scale(1.4) rotate(20deg);
                             opacity: 1;
                         }
-                        30% {
-                            transform: translate(calc(-50% + ${bounceX * 0.3}px), calc(-50% + ${bounceY * 0.3}px)) scale(1.1) rotate(-10deg);
+                        25% {
+                            transform: translate(calc(-50% + ${bounceX * 0.4}px), calc(-50% + ${bounceY * 0.4}px)) scale(1.2) rotate(-15deg);
                             opacity: 1;
                         }
-                        60% {
-                            transform: translate(calc(-50% + ${bounceX * 0.7}px), calc(-50% + ${bounceY * 0.7}px)) scale(0.9) rotate(5deg);
-                            opacity: 0.8;
+                        50% {
+                            transform: translate(calc(-50% + ${bounceX * 0.8}px), calc(-50% + ${bounceY * 0.8}px)) scale(1) rotate(10deg);
+                            opacity: 0.9;
                         }
                         100% {
-                            transform: translate(calc(-50% + ${bounceX}px), calc(-50% + ${bounceY}px)) scale(0.5) rotate(0deg);
+                            transform: translate(calc(-50% + ${bounceX}px), calc(-50% + ${bounceY}px)) scale(0.4) rotate(0deg);
                             opacity: 0;
                         }
                     }
@@ -556,9 +591,9 @@
                 style.textContent = keyframes;
                 document.head.appendChild(style);
                 
-                // Apply animation
-                popupCat.style.animation = `${keyframeName} 1.2s ease-out forwards`;
-                popupCat.style.animationDelay = (i * 0.1) + 's';
+                // Apply faster animation (reduced from 1.2s to 0.8s)
+                popupCat.style.animation = `${keyframeName} 0.8s ease-out forwards`;
+                popupCat.style.animationDelay = (i * 0.05) + 's'; // Reduced delay
                 
                 document.body.appendChild(popupCat);
                 
@@ -570,23 +605,31 @@
                     if (style.parentNode) {
                         style.parentNode.removeChild(style);
                     }
-                }, 1200 + (i * 100));
+                }, 800 + (i * 50)); // Adjusted timing
             }
         }
 
-        // Spawn tracking cats on right click
+        // Spawn bouncing tracking cats on right click
         function spawnTrackingCat(clickX, clickY) {
+            if (spawnedCats.length >= 200) return; // Limit to 200 cats
+            
             const spawnedCat = document.createElement('div');
             spawnedCat.className = 'spawned-cat';
             
-            // Random position with some offset from click
-            const offsetX = (Math.random() - 0.5) * 200;
-            const offsetY = (Math.random() - 0.5) * 200;
-            const finalX = Math.max(100, Math.min(window.innerWidth - 100, clickX + offsetX));
-            const finalY = Math.max(100, Math.min(window.innerHeight - 100, clickY + offsetY));
+            // Random cat image for variety
+            const randomImage = catImages[Math.floor(Math.random() * catImages.length)];
+            spawnedCat.style.backgroundImage = `url('${randomImage}')`;
             
-            spawnedCat.style.left = finalX - 100 + 'px'; // Center the cat
-            spawnedCat.style.top = finalY - 100 + 'px';
+            // Starting position
+            const catSize = 180;
+            const x = Math.max(catSize/2, Math.min(window.innerWidth - catSize/2, clickX));
+            const y = Math.max(catSize/2, Math.min(window.innerHeight - catSize/2, clickY));
+            
+            // Random velocity for bouncing
+            const speed = 2 + Math.random() * 4; // Random speed between 2-6px per frame
+            const angle = Math.random() * 2 * Math.PI;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
             
             // Create eyes for the spawned cat
             const eyesContainer = document.createElement('div');
@@ -610,20 +653,37 @@
             
             document.body.appendChild(spawnedCat);
             
-            // Add to spawned cats array for tracking
-            spawnedCats.push({
+            // Add to spawned cats array with physics properties
+            const catData = {
                 element: spawnedCat,
                 leftPupil: leftPupil,
-                rightPupil: rightPupil
-            });
+                rightPupil: rightPupil,
+                x: x,
+                y: y,
+                vx: vx,
+                vy: vy,
+                birthTime: Date.now()
+            };
             
-            // Limit number of spawned cats to prevent performance issues
-            if (spawnedCats.length > 8) {
-                const oldCat = spawnedCats.shift();
-                if (oldCat.element.parentNode) {
-                    oldCat.element.parentNode.removeChild(oldCat.element);
+            spawnedCats.push(catData);
+            updateCatCounter();
+            
+            // Remove after 20 seconds
+            setTimeout(() => {
+                const index = spawnedCats.indexOf(catData);
+                if (index > -1) {
+                    // Fade out animation
+                    catData.element.style.animation = 'fadeOut 0.5s ease-out forwards';
+                    
+                    setTimeout(() => {
+                        spawnedCats.splice(index, 1);
+                        if (catData.element.parentNode) {
+                            catData.element.parentNode.removeChild(catData.element);
+                        }
+                        updateCatCounter();
+                    }, 500);
                 }
-            }
+            }, 20000); // 20 seconds
         }
 
         // Create sparkles
@@ -646,6 +706,9 @@
         // Create sparkles periodically
         setInterval(createSparkle, 500);
 
+        // Start animation loop
+        animate();
+
         // Initialize cat gaze on page load
         updateCatGaze();
         updateCatRotation();
@@ -654,7 +717,6 @@
         window.addEventListener('resize', () => {
             updateCatGaze();
             updateCatRotation();
-            updateSpawnedCats();
         });
 
         // Hide default cursor and show custom one
